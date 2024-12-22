@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Desenhos.Models;
+using System.Xml;
 
 namespace ToDoListAPI.Controllers
 {
@@ -76,7 +77,79 @@ namespace ToDoListAPI.Controllers
                     Console.WriteLine($"{pai.Name} é pai de {filho.Name}");
                 }*/
 
-            return Ok(await PesoFilhos(id));
+            var peso = await PesoFilhos(id);
+
+            return Ok($"O Desenho {desenho.Name} tem peso total de {peso}");
+        }
+
+        [HttpGet("FilhoMaisPesado/{id}")]
+        public async Task<ActionResult<string>> GetFilhoMaisPesadoOfDesenho(long id)
+        {
+            //var desenhoOld = await _context.Desenhos.FindAsync(id);
+
+            var desenho = await _context.Desenhos
+                                  .Include(d => d.Filhos)
+                                  .FirstOrDefaultAsync(d => d.Id == id);
+
+            if (desenho == null || desenho.Filhos == null)
+            {
+                return NotFound();
+            }
+
+            long idMaisPesado = 0;
+            int pedoIdMaisPesado = 0;
+            int novoPeso = 0;
+
+            foreach (var f in desenho.Filhos)
+            {
+                novoPeso = await PesoFilhos(f.FilhoId);
+                if (novoPeso > pedoIdMaisPesado)
+                {
+                    idMaisPesado = f.FilhoId;
+                    pedoIdMaisPesado = novoPeso;
+                }
+            }
+
+            var filhoMaisPesado = await _context.Desenhos.FindAsync(idMaisPesado);
+
+            if (filhoMaisPesado == null)
+            {
+                return NotFound();
+            }
+
+            return Ok($"O filho mais pesado é {filhoMaisPesado.Name}");
+        }
+
+        [HttpGet("ListaFilhos/{id}")]
+        public async Task<ActionResult<List<DesenhoDTO>>> GetListaFilhosOfDesenho(long id)
+        {
+            //var desenhoOld = await _context.Desenhos.FindAsync(id);
+
+            var desenho = await _context.Desenhos
+                                  .Include(d => d.Filhos)
+                                  .FirstOrDefaultAsync(d => d.Id == id);
+
+            if (desenho == null || desenho.Filhos == null)
+            {
+                return NotFound();
+            }
+
+            int pesoTotal = 0;
+            var listaFilhos = new List<DesenhoDTO>();
+            DesenhoDTO desenhoDTO;
+
+            foreach (var f in desenho.Filhos)
+            {
+                pesoTotal = await PesoFilhos(f.FilhoId);
+                desenho = await _context.Desenhos.FindAsync(f.FilhoId);
+                desenhoDTO = DesenhoToDTO(desenho);
+                desenhoDTO.Peso = pesoTotal;
+                listaFilhos.Add(desenhoDTO);
+            }
+
+            var newLista = listaFilhos.OrderBy(f => f.Peso);
+
+            return Ok(newLista);
         }
 
         // PUT: api/Desenhoss/5
